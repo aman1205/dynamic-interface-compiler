@@ -1,20 +1,23 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Editor } from "@/component/Editor";
-import { Renderer } from "@/component/Renderer";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { downloadJSON } from "@/utils/downloadJson";
+import { DnDRenderer } from "@/component/DnDRenderer";
 
 const DEFAULT_SCHEMA = JSON.stringify(
-  {
-    type: "form",
-    fields: [
-      { label: "Email", type: "email", required: true },
-      { label: "Age", type: "number", min: 18 },
-    ],
-    submitText: "Register",
-    onSubmit: "if (values.age < 21) return 'Too young';",
-  },
+  [
+    {
+      id: "a7380f5c-befe-4bd4-873c-aafd5ccc89da",
+      type: "form",
+      fields: [
+        { label: "Email", type: "email", required: true },
+        { label: "Age", type: "number", min: 18 },
+      ],
+      submitText: "Register",
+      onSubmit: "if (values.age < 21) return 'Too young';",
+    },
+  ],
   null,
   2
 );
@@ -24,33 +27,83 @@ export default function Home() {
     "json-schema",
     DEFAULT_SCHEMA
   );
-  const [parsedSchema, setParsedSchema] = useState<any>(null);
+  const [parsedSchema, setParsedSchema] = useState<any[] | null>(null);
+  const [parseError, setParseError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const handleApplySchema = () => {
     try {
-      setParsedSchema(JSON.parse(schemaText));
-    } catch (e) {
+      const parsed = JSON.parse(schemaText);
+      const normalized = Array.isArray(parsed) ? parsed : [parsed];
+      setParsedSchema(normalized);
+      setSchemaText(JSON.stringify(normalized, null, 2));
+      setParseError(null);
+    } catch (e: any) {
       setParsedSchema(null);
+      setParseError(e.message || "Invalid JSON format");
     }
-  }, [schemaText]);
+  };
 
   return (
-    <div className="w-7xl mx-auto p-8">
-      <h1 className="text-3xl font-bold mb-4">⚙️ Dynamic Interface Compiler</h1>
-      <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
-        <Editor schema={schemaText} setSchema={setSchemaText} />
-        <div className="border p-4 rounded-md min-h-80">
-          <Renderer schema={parsedSchema} />
+    <main className="max-w-7xl mx-auto px-6 py-10 space-y-8">
+      <header className="text-center">
+        <h1 className="text-4xl font-bold mb-2 text-gray-800">
+          Dynamic Interface Compiler
+        </h1>
+      </header>
+
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bg-white border rounded-xl shadow-sm p-4">
+          <h2 className="text-lg font-semibold mb-2 text-gray-700">
+            🧾 JSON Editor
+          </h2>
+          <Editor schema={schemaText} setSchema={setSchemaText} />
+
+          <div className="flex justify-end mt-4">
+            <button
+              onClick={handleApplySchema}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md transition"
+            >
+              Apply Schema
+            </button>
+          </div>
         </div>
-      </div>
-      <div className="mt-6 flex justify-center">
+
+        <div className="bg-white border rounded-xl shadow-sm p-4">
+          <h2 className="text-lg font-semibold mb-2 text-gray-700">
+            Live Preview
+          </h2>
+
+          {parseError && (
+            <div className="text-red-600 font-medium mb-3">
+              Invalid JSON: {parseError}
+            </div>
+          )}
+
+          <div className="min-h-60">
+            {parsedSchema ? (
+              <DnDRenderer
+                schema={parsedSchema}
+                setSchema={setParsedSchema}
+                setSchemaText={setSchemaText}
+              />
+            ) : (
+              <div className="text-gray-400 italic mt-6">
+                Schema preview unavailable. Fix JSON above and click "Apply
+                Schema".
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <div className="flex justify-center mt-8">
         <button
           onClick={() => parsedSchema && downloadJSON(parsedSchema)}
-          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-md transition"
         >
-          Export JSON
+          Export Schema as JSON
         </button>
       </div>
-    </div>
+    </main>
   );
 }
