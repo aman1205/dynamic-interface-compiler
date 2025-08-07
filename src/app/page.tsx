@@ -1,45 +1,53 @@
 "use client";
-import { useState } from "react";
-import { Editor } from "@/component/Editor";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { downloadJSON } from "@/utils/downloadJson";
-import { DnDRenderer } from "@/component/DnDRenderer";
 
-const DEFAULT_SCHEMA = JSON.stringify(
-  [
-    {
-      id: "a7380f5c-befe-4bd4-873c-aafd5ccc89da",
-      type: "form",
-      fields: [
-        { label: "Email", type: "email", required: true },
-        { label: "Age", type: "number", min: 18 },
-      ],
-      submitText: "Register",
-      onSubmit: "if (values.age < 21) return 'Too young';",
-    },
-  ],
-  null,
-  2
-);
+import { useEffect } from "react";
+import { Editor } from "@/component/Editor";
+import { downloadJSON } from "@/utils/downloadJson";
+import { SchemaRenderer } from "@/component/DnDRenderer";
+import { useSchema } from "@/hooks/useSchema";
+
+const DEFAULT_SCHEMA = [
+  {
+    id: "a7380f5c-befe-4bd4-873c-aafd5ccc89da",
+    type: "form",
+    fields: [
+      { label: "Email", type: "email", required: true },
+      { label: "Age", type: "number", min: 18 }
+    ],
+    submitText: "Register",
+    onSubmit: "if (values.age < 21) return 'Too young';"
+  }
+];
 
 export default function Home() {
-  const [schemaText, setSchemaText] = useLocalStorage<string>(
-    "json-schema",
-    DEFAULT_SCHEMA
-  );
-  const [parsedSchema, setParsedSchema] = useState<any[] | null>(null);
-  const [parseError, setParseError] = useState<string | null>(null);
+  const schema = useSchema((state) => state.schema);
+  const setSchema = useSchema((state) => state.setSchema);
+
+  useEffect(() => {
+    // Load from localStorage if available
+    const saved = localStorage.getItem("schema");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setSchema(Array.isArray(parsed) ? parsed : [parsed]);
+      } catch (_) {
+        setSchema(DEFAULT_SCHEMA);
+      }
+    } else {
+      setSchema(DEFAULT_SCHEMA);
+    }
+  }, [setSchema]);
 
   const handleApplySchema = () => {
+    const editorText = localStorage.getItem("editorText");
     try {
-      const parsed = JSON.parse(schemaText);
+      if (!editorText) return;
+      const parsed = JSON.parse(editorText);
       const normalized = Array.isArray(parsed) ? parsed : [parsed];
-      setParsedSchema(normalized);
-      setSchemaText(JSON.stringify(normalized, null, 2));
-      setParseError(null);
+      setSchema(normalized);
+      localStorage.setItem("schema", JSON.stringify(normalized, null, 2));
     } catch (e: any) {
-      setParsedSchema(null);
-      setParseError(e.message || "Invalid JSON format");
+      alert(e.message || "Invalid JSON format");
     }
   };
 
@@ -56,16 +64,7 @@ export default function Home() {
           <h2 className="text-lg font-semibold mb-2 text-gray-700">
             🧾 JSON Editor
           </h2>
-          <Editor schema={schemaText} setSchema={setSchemaText} />
-
-          <div className="flex justify-end mt-4">
-            <button
-              onClick={handleApplySchema}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md transition"
-            >
-              Apply Schema
-            </button>
-          </div>
+          <Editor />
         </div>
 
         <div className="bg-white border rounded-xl shadow-sm p-4">
@@ -73,19 +72,9 @@ export default function Home() {
             Live Preview
           </h2>
 
-          {parseError && (
-            <div className="text-red-600 font-medium mb-3">
-              Invalid JSON: {parseError}
-            </div>
-          )}
-
           <div className="min-h-60">
-            {parsedSchema ? (
-              <DnDRenderer
-                schema={parsedSchema}
-                setSchema={setParsedSchema}
-                setSchemaText={setSchemaText}
-              />
+            {schema.length > 0 ? (
+              <SchemaRenderer />
             ) : (
               <div className="text-gray-400 italic mt-6">
                 Schema preview unavailable. Fix JSON above and click "Apply
@@ -98,7 +87,7 @@ export default function Home() {
 
       <div className="flex justify-center mt-8">
         <button
-          onClick={() => parsedSchema && downloadJSON(parsedSchema)}
+          onClick={() => downloadJSON(schema)}
           className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-md transition"
         >
           Export Schema as JSON

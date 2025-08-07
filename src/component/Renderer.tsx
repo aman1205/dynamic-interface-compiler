@@ -7,7 +7,7 @@ export const Renderer = ({ schema }: { schema: any }) => {
 
   switch (schema.type) {
     case 'form':
-      return <DynamicForm {...schema} />
+      return <DynamicForm fields={schema.fields} submitText={schema.submitText} onSubmit={schema.onSubmit} />
     case 'text':
       return <DynamicText {...schema} />
     case 'image':

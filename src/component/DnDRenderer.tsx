@@ -1,133 +1,109 @@
-"use client";
+import { useSchema } from "@/hooks/useSchema";
+import { v4 as uuid } from "uuid";
+import { Renderer } from "./Renderer";
 import {
   DndContext,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
+  useDraggable,
+  useDroppable,
+  DragEndEvent,
+  closestCenter ,
 } from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { Renderer } from "./Renderer";
-import { v4 as uuid } from "uuid";
 
-export function DnDRenderer({
-  schema,
-  setSchema,
-  setSchemaText,
-}: {
-  schema: any[];
-  setSchema: (val: any[]) => void;
-  setSchemaText?: (val: string) => void;
-}) {
-  const sensors = useSensors(useSensor(PointerSensor));
+const blockTypes = [
+  { type: "form", label: "+ Form" },
+  { type: "text", label: "+ Text" },
+  { type: "image", label: "+ Image" },
+];
 
-  const updateSchema = (newSchema: any[]) => {
-    setSchema(newSchema);
-    if (setSchemaText) {
-      setSchemaText(JSON.stringify(newSchema, null, 2));
-    }
-  };
+interface Block {
+  id: string;
+  type: string;
+  [key: string]: any;
+} 
 
-  const handleDragEnd = (event: any) => {
-    const { active, over } = event;
-    if (active.id !== over?.id) {
-      const oldIndex = schema.findIndex((b) => b.id === active.id);
-      const newIndex = schema.findIndex((b) => b.id === over.id);
-      const newSchema = arrayMove(schema, oldIndex, newIndex);
-      updateSchema(newSchema);
-    }
-  };
+function DraggableButton({ type, label }: { type: string; label: string }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: 'draggable-' + type,
+    data: { type },   
+  });
 
-  const addBlock = (type: "text" | "form" | "image") => {
-    const newBlock =
-      type === "text"
-        ? { id: uuid(), type: "text", content: "New text block" }
-        : type === "image"
-        ? {
-            id: uuid(),
-            type: "image",
-            src: "https://picsum.photos/200",
-            alt: "New Image",
-          }
-        : {
-            id: uuid(),
-            type: "form",
-            fields: [
-              { label: "Name", type: "text", required: true },
-              { label: "Age", type: "number" },
-            ],
-            submitText: "Submit",
-          };
-    updateSchema([...schema, newBlock]);
-  };
-
-  const handleDelete = (id: string) => {
-    console.log("object " + id);
-    const newSchema = schema.filter((block) => block.id !== id);
-    console.log("Deleting block with id:", id, "New schema:", newSchema);
-    updateSchema(newSchema);
-  };
+  const style = transform ? {
+    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+  } : undefined;
 
   return (
-    <div>
-      <div className="flex gap-2 mb-4">
-        <button onClick={() => addBlock("form")} className="btn-primary">
-          + Form
-        </button>
-        <button onClick={() => addBlock("text")} className="btn-primary">
-          + Text
-        </button>
-        <button onClick={() => addBlock("image")} className="btn-primary">
-          + Image
-        </button>
-      </div>
-
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
-        <SortableContext
-          items={schema.map((b) => b.id)}
-          strategy={verticalListSortingStrategy}
-        >
-          <div className="space-y-4">
-            {schema.map((block) => (
-              <SortableBlock key={block.id} id={block.id} block={block} />
-            ))}
-          </div>
-        </SortableContext>
-      </DndContext>
-    </div>
-  );
-}
-
-const SortableBlock = ({ id, block }: { id: string; block: any }) => {
-  const { attributes, listeners, setNodeRef, transform, transition } =
-    useSortable({ id });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  return (
-    <div
+    <button
       ref={setNodeRef}
       {...attributes}
       {...listeners}
       style={style}
-      className="p-4 border rounded shadow-sm bg-white relative"
+      className={`bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-md transition opacity-${isDragging ? "50" : "100"} cursor-grab`}
+      type="button"
     >
-      <div className="text-xs font-bold uppercase text-gray-500 mb-2">
-        {block.type.toUpperCase()}
+      {label}
+    </button>
+  );
+}
+
+export const SchemaRenderer = () => {
+  const schema = useSchema((state) => state.schema);
+  const addBlock = useSchema((state) => state.addBlock);
+
+  const { isOver, setNodeRef } = useDroppable({
+    id: 'main-drop-area',
+  });
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (active?.data?.current?.type) {
+      const type = active.data.current.type;
+      const id = uuid();
+
+      const block =
+        type === "text"
+          ? { id, type: "text", content: "New text block" }
+          : type === "image"
+            ? { id, type: "image", src: "https://picsum.photos/200", alt: "Image" }
+            : {
+                id,
+                type: "form",
+                fields: [
+                  { label: "Name", type: "text", required: true },
+                  { label: "Email", type: "email" },
+                ],
+                submitText: "Submit",
+              };
+
+      addBlock(block); 
+    }
+  };
+
+  return (
+    <DndContext onDragEnd={handleDragEnd}   collisionDetection={closestCenter}>
+      
+      <div className="flex gap-2 mb-4">
+        {blockTypes.map((btn) => (
+          <DraggableButton key={btn.type} type={btn.type} label={btn.label} />
+        ))}
       </div>
-      <Renderer schema={block} />
-    </div>
+      <div
+        ref={setNodeRef}
+        className={`space-y-4 min-h-[200px] border-2 ${
+          isOver ? "border-blue-500 bg-blue-50" : "border-dashed"
+        } p-4 transition-all`}
+      >
+        {schema.length === 0 && (
+          <div className="text-gray-400 text-center py-8">
+            Drag a block button here to add!
+          </div>
+        )}
+        {schema.map((block: Block) => (
+          <div key={block.id}>
+            <Renderer schema={block} />
+          </div>
+        ))}
+      </div>
+    </DndContext>
   );
 };
